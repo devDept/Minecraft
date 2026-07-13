@@ -45,7 +45,7 @@ namespace Minecraft
             design1.Rendered.ShadowMode = shadowType.None;
 
             // selection colors
-			design1.Selection.Color = Color.Black;
+			design1.Selection.Color = Color.Transparent;
             design1.Selection.ColorDynamic = Color.FromArgb(25, Color.Black);
             design1.Selection.HaloOuterColorDynamic = Color.Transparent;
             design1.Selection.HaloInnerColorDynamic = Color.Black;
@@ -125,10 +125,13 @@ namespace Minecraft
             }
 
             design1.Entities.AddRange(ground);
-			
+
             base.OnLoad(e);
         }
-
+        
+        /// <summary>
+        /// Adds a cube adjacent to the selected face.
+        /// </summary>
         private void design1_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.AddedItems.Count > 0)
@@ -151,17 +154,22 @@ namespace Minecraft
                     }
                 }
 
-                if (position[0] >= 0 && position[0] < MatrixDepth && 
-                    position[1] >= 0 && position[1] < MatrixDepth && 
-                    position[2] >= 0 && position[2] < MatrixHeight)
+                // A clicked boundary face can map to a cell outside the 16x16x16 world:
+                // there is nothing to place there, and the neighbor lookups below would
+                // index _matrix3D out of range, so bail out.
+                if (position[0] < 0 || position[0] >= MatrixDepth ||
+                    position[1] < 0 || position[1] >= MatrixWidth ||
+                    position[2] < 0 || position[2] >= MatrixHeight)
                 {
-                    _matrix3D[position[0], position[1], position[2]] = _activeMatIndex;
+                    return;
                 }
+
+                _matrix3D[position[0], position[1], position[2]] = _activeMatIndex;
 
                 bool[] addFace = new bool[6];
 
                 // bottom
-                if (/*position[2] == 0 ||*/ position[2] > 0 && _matrix3D[position[0], position[1], position[2] - 1] == 0)
+                if (position[2] > 0 && _matrix3D[position[0], position[1], position[2] - 1] == 0)
                 {
                     addFace[0] = true;
                 }
@@ -203,10 +211,17 @@ namespace Minecraft
 
                 design1.Entities.AddRange(DrawCube(min.X, min.Y, min.Z, addFace));
 
+                // Force the regen here: during dynamic picking a MouseMove can draw these
+                // meshes before the deferred compile runs, throwing "entity not properly compiled".
+                design1.Entities.Regen();
+                
                 design1.Invalidate();
             }
         }
 
+        /// <summary>
+        /// Creates the visible faces of a cube at the given position.
+        /// </summary>
         private Entity[] DrawCube(double x, double y, double z, bool[] drawFaceList)
         {
             Block block = GetMaterialByIndex(_activeMatIndex);
@@ -292,6 +307,9 @@ namespace Minecraft
             return faces.ToArray();
         }
 
+        /// <summary>
+        /// Creates a square textured mesh from four corner points.
+        /// </summary>
         private Mesh CreateFace(Point3D v1, Point3D v2, Point3D v3, Point3D v4, string matName)
         {
             Mesh squareFace = new Mesh(new Point3D[] {v1, v2, v3, v4}, new IndexTriangle[] { new IndexTriangle(0, 1, 2), new IndexTriangle(0, 2, 3) });
@@ -305,7 +323,7 @@ namespace Minecraft
         }
 
         /// <summary>
-        /// Removes existing adjacent faces
+        /// Removes existing adjacent faces.
         /// </summary>
         private void RemoveAdjacentFaces(Point3D blockMin, Point3D blockMax)
         {
@@ -347,6 +365,9 @@ namespace Minecraft
             }
         }
 
+        /// <summary>
+        /// Updates the active material from the selected radio button.
+        /// </summary>
         private void radioButtonMaterial_CheckedChanged(object sender, EventArgs e)
         {
             if (radioButtonDirt.Checked)
@@ -380,6 +401,9 @@ namespace Minecraft
         public readonly string Front;
         public readonly string Rear;
 
+        /// <summary>
+        /// Initializes a block with a specific material for each face.
+        /// </summary>
         public Block(string bottom, string front, string right, string rear, string left, string top)
         {
             Top = top;
@@ -390,6 +414,9 @@ namespace Minecraft
             Rear = rear;
         }
 
+        /// <summary>
+        /// Initializes a block with the same material on all faces.
+        /// </summary>
         public Block(string same)
         {
             Top = same;
